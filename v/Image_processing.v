@@ -1,3 +1,6 @@
+// Written by us
+
+
 module image_processing (
     input wire clk,
     input wire rst,
