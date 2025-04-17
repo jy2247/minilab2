@@ -350,10 +350,10 @@ image_processing  ux (
     .processed_pixel2(processed_pixel2),
     .processed_valid2(processed_valid2),    
 );                
-// assign final_valid =    SW[1] == 1 ? sCCD_DVAL :
-//                         SW[2] == 1 ? processed_valid:
-//                         SW[3] == 1 ? processed_valid2 :
-//                                       sCCD_DVAL ;
+assign final_valid =    SW[1] == 1 ? sCCD_DVAL :
+                         SW[2] == 1 ? processed_valid:
+                         SW[3] == 1 ? processed_valid2 :
+                                       sCCD_DVAL ;
 
 assign final_pixel_R =  SW[1] == 1 ? sCCD_R :
                         SW[2] == 1 ? processed_pixel:
@@ -369,6 +369,20 @@ assign final_pixel_B =  SW[1] == 1 ? sCCD_B :
                         SW[2] == 1 ? processed_pixel:
                         SW[3] == 1 ? processed_pixel2 :
                                      sCCD_B;
+
+
+wire [11:0] resized_pixel;
+wire        resized_valid;
+
+resize34 resize_inst (
+    .clk       (D5M_PIXLCLK),   // input clock
+    .rst       (DLY_RST_1),     // reset
+    .pixel_in  (final_pixel_R), // feed R (you could also average R/G/B)
+    .valid_in  (final_valid),
+    .pixel_out (resized_pixel),
+    .valid_out (resized_valid)
+);
+
 
 //Frame count display
 SEG7_LUT_6        u5 (  
@@ -395,53 +409,53 @@ Sdram_Control     u7 (  // HOST Side
                      .RESET_N(KEY[0]),
                      .CLK(sdram_ctrl_clk),
 
-                     // FIFO Write Side 1
-                     .WR1_DATA({1'b0,final_pixel_G[11:7],final_pixel_B[11:2]}),
-                     .WR1(sCCD_DVAL),
-                     .WR1_ADDR(0),
-                     .WR1_MAX_ADDR(640*480),
-                     .WR1_LENGTH(8'h50),
-                     .WR1_LOAD(!DLY_RST_0),
-                     .WR1_CLK(~D5M_PIXLCLK),
+                  // FIFO Write Side 1: resized stream
+                  .WR1_DATA   ({1'b0, resized_pixel[11:7], resized_pixel[11:2]}),
+                  .WR1        (resized_valid),
+                  .WR1_ADDR   (0),
+                  .WR1_MAX_ADDR(640*480),
+                  .WR1_LENGTH (8'h50),
+                  .WR1_LOAD   (!DLY_RST_0),
+                  .WR1_CLK    (~D5M_PIXLCLK),
 
-                     // FIFO Write Side 2
-                     .WR2_DATA({1'b0,final_pixel_G[6:2],final_pixel_R[11:2]}),
-                     .WR2(sCCD_DVAL),
-                     .WR2_ADDR(23'h100000),
-                     .WR2_MAX_ADDR(23'h100000+640*480),
-                     .WR2_LENGTH(8'h50),
-                     .WR2_LOAD(!DLY_RST_0),          
-                     .WR2_CLK(~D5M_PIXLCLK),
+                  // FIFO Write Side 2: same resized stream
+                  .WR2_DATA   ({1'b0, resized_pixel[11:7], resized_pixel[11:2]}),
+                  .WR2        (resized_valid),
+                  .WR2_ADDR(23'h100000),
+                  .WR2_MAX_ADDR(23'h100000+640*480),
+                  .WR2_LENGTH(8'h50),
+                  .WR2_LOAD(!DLY_RST_0),          
+                  .WR2_CLK(~D5M_PIXLCLK),
 
-                     // FIFO Read Side 1
-                     .RD1_DATA(Read_DATA1),
-                     .RD1(Read),
-                     .RD1_ADDR(0),
-                     .RD1_MAX_ADDR(640*480),
-                     .RD1_LENGTH(8'h50),
-                     .RD1_LOAD(!DLY_RST_0),
-                     .RD1_CLK(~VGA_CTRL_CLK),
-                     
-                     // FIFO Read Side 2
-                     .RD2_DATA(Read_DATA2),
-                     .RD2(Read),
-                     .RD2_ADDR(23'h100000),
-                     .RD2_MAX_ADDR(23'h100000+640*480),
-                     .RD2_LENGTH(8'h50),
-                     .RD2_LOAD(!DLY_RST_0),
-                     .RD2_CLK(~VGA_CTRL_CLK),
-                             
-                     // SDRAM Side
-                     .SA(DRAM_ADDR),
-                     .BA(DRAM_BA),
-                     .CS_N(DRAM_CS_N),
-                     .CKE(DRAM_CKE),
-                     .RAS_N(DRAM_RAS_N),
-                     .CAS_N(DRAM_CAS_N),
-                     .WE_N(DRAM_WE_N),
-                     .DQ(DRAM_DQ),
-                     .DQM({DRAM_UDQM,DRAM_LDQM})
-                     );
+                  // FIFO Read Side 1
+                  .RD1_DATA(Read_DATA1),
+                  .RD1(Read),
+                  .RD1_ADDR(0),
+                  .RD1_MAX_ADDR(640*480),
+                  .RD1_LENGTH(8'h50),
+                  .RD1_LOAD(!DLY_RST_0),
+                  .RD1_CLK(~VGA_CTRL_CLK),
+                  
+                  // FIFO Read Side 2
+                  .RD2_DATA(Read_DATA2),
+                  .RD2(Read),
+                  .RD2_ADDR(23'h100000),
+                  .RD2_MAX_ADDR(23'h100000+640*480),
+                  .RD2_LENGTH(8'h50),
+                  .RD2_LOAD(!DLY_RST_0),
+                  .RD2_CLK(~VGA_CTRL_CLK),
+                        
+                  // SDRAM Side
+                  .SA(DRAM_ADDR),
+                  .BA(DRAM_BA),
+                  .CS_N(DRAM_CS_N),
+                  .CKE(DRAM_CKE),
+                  .RAS_N(DRAM_RAS_N),
+                  .CAS_N(DRAM_CAS_N),
+                  .WE_N(DRAM_WE_N),
+                  .DQ(DRAM_DQ),
+                  .DQM({DRAM_UDQM,DRAM_LDQM})
+                  );
                      
            
 //D5M I2C control
